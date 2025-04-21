@@ -7,13 +7,20 @@ model_path = "/home/TomAdmin/phi-3-mini-128k-instruct"  # <-- your local model p
 tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
 model = AutoModelForCausalLM.from_pretrained(model_path, trust_remote_code=True)
 
-def preprocess(example):
-    prompt = example["instruction"]
-    response = example["output"]
-    text = f"<|user|>\n{prompt}\n<|assistant|>\n{response}"
-    return tokenizer(text, truncation=True, max_length=2048, padding="max_length")
+def preprocess(batch):
+    prompts = [
+        f"<|user|>\n{instruction}\n<|assistant|>\n{output}"
+        for instruction, output in zip(batch["instruction"], batch["output"])
+    ]
+    return tokenizer(
+        prompts,
+        truncation=True,
+        max_length=2048,
+        padding="max_length"
+    )
 
 dataset = load_dataset("json", data_files="hf_train.jsonl", split="train")
+
 tokenized = dataset.map(
     preprocess,
     batched=True,
