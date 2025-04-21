@@ -14,7 +14,11 @@ def preprocess(example):
     return tokenizer(text, truncation=True, max_length=2048, padding="max_length")
 
 dataset = load_dataset("json", data_files="hf_train.jsonl", split="train")
-tokenized = dataset.map(preprocess, batched=True)
+tokenized = dataset.map(
+    preprocess,
+    batched=True,
+    remove_columns=dataset.column_names
+)
 
 training_args = TrainingArguments(
     output_dir="./phi3-finetuned",
