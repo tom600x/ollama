@@ -55,8 +55,8 @@ def validate_dataset(dataset_path):
 
 def create_modelfile(model_name, dataset_path):
     """Create an Ollama Modelfile for training"""
-    modelfile_content = f"""
-FROM {model_name}
+    # Start with model definition
+    modelfile_content = f"""FROM {model_name}
 
 # System prompt that sets the context and behavior for the model
 SYSTEM """
@@ -65,18 +65,44 @@ SYSTEM """
     modelfile_content += """You are an AI assistant specialized in converting PL/SQL code to C# LINQ. 
 Provide clear, accurate, and efficient conversion of database queries and operations."""
 
-    # Add dataset reference for training
-    modelfile_content += f"""
+    # Process dataset file for training examples
+    try:
+        with open(dataset_path, 'r') as f:
+            dataset = json.load(f)
+        
+        # Go through each conversation in the dataset
+        for i, example in enumerate(dataset):
+            if "messages" not in example or not example["messages"]:
+                continue
+            
+            messages = example["messages"]
+            if len(messages) < 2:
+                continue
+                
+            # Look for user and assistant message pairs
+            for j in range(len(messages) - 1):
+                if j+1 < len(messages) and "role" in messages[j] and "content" in messages[j] and \
+                   "role" in messages[j+1] and "content" in messages[j+1]:
+                    
+                    if messages[j]["role"] == "user" and messages[j+1]["role"] == "assistant":
+                        # Add this as a training example
+                        user_content = messages[j]["content"].replace("\"", "\\\"").replace("\n", "\\n")
+                        assistant_content = messages[j+1]["content"].replace("\"", "\\\"").replace("\n", "\\n")
+                        
+                        modelfile_content += f"""
 
-# Training data
-DATASET {dataset_path}
-"""
+# Example {i+1}
+PROMPT {user_content}
+RESPONSE {assistant_content}"""
+    except Exception as e:
+        print(f"Error processing dataset: {e}")
+        return False
 
     # Write the Modelfile
     with open("Modelfile", "w") as f:
         f.write(modelfile_content)
     
-    print("✅ Created Modelfile for training")
+    print("✅ Created Modelfile for training with examples from dataset")
     return True
 
 def train_model(output_model_name):
