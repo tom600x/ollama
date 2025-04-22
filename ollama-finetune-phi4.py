@@ -1,0 +1,57 @@
+from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments, Trainer, DataCollatorForLanguageModeling
+from datasets import load_dataset
+import torch
+import argparse
+
+parser = argparse.ArgumentParser(description="Fine-tune the Phi-4 model with HuggingFace Transformers.")
+parser.add_argument('--model_path', type=str, required=True, help='Path to the local Phi-4 model directory')
+args = parser.parse_args()
+
+model_path = args.model_path
+
+tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+model = AutoModelForCausalLM.from_pretrained(model_path, trust_remote_code=True)
+
+def preprocess(batch):
+    prompts = [
+        f"<|user|>\n{instruction}\n<|assistant|>\n{output}"
+        for instruction, output in zip(batch["instruction"], batch["output"])
+    ]
+    return tokenizer(
+        prompts,
+        truncation=True,
+        max_length=2048,
+        padding="max_length"
+    )
+
+dataset = load_dataset("json", data_files="hf_train.jsonl", split="train")
+
+tokenized = dataset.map(
+    preprocess,
+    batched=True,
+    remove_columns=dataset.column_names
+)
+
+training_args = TrainingArguments(
+    output_dir="./phi4-finetuned",
+    per_device_train_batch_size=1,
+    num_train_epochs=1,
+    save_strategy="epoch",
+    logging_steps=10,
+    fp16=False,  # Set True if you have a GPU with fp16 support
+    bf16=torch.cuda.is_available(),  # Use bf16 if available
+    report_to="none"
+)
+
+data_collator = DataCollatorForLanguageModeling(tokenizer, mlm=False)
+
+trainer = Trainer(
+    model=model,
+    args=training_args,
+    train_dataset=tokenized,
+    data_collator=data_collator,
+)
+
+trainer.train()
+model.save_pretrained("./phi4-finetuned")
+tokenizer.save_pretrained("./phi4-finetuned")
